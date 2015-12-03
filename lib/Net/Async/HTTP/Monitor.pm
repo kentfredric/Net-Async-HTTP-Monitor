@@ -29,7 +29,7 @@ use Class::Tiny qw( http uri on_updated_chunk on_updated on_no_content on_error 
       first_interval => $self->first_interval,
       on_tick        => sub { $self->_on_tick(@_) },
     );
-    $timer->{IO_Async_Notifier__parent} = $self;
+    IO::Async::Notifier::add_child( $self, $timer );
     $timer;
   }
 };
@@ -207,19 +207,23 @@ version 0.001000
   my $loop = IO::Async::Loop->new();
   my $http = Net::Async::HTTP->new();
 
-  $loop->add(  $http );
+  $loop->add($http);
 
   my $monitor = Net::Async::HTTP::Monitor->new(
-    uri     => 'http://example.org/some-infrequently-changed-page',
+    http             => $http,
+    uri              => 'http://example.org/some-infrequently-changed-page',
     refresh_interval => 60,
-    on_new_content => sub {
-        # requests be made with various caching options 
-        # prioritizing to make use of if-not-modified-since and etag and misc caching
-        # stuff
+    on_new_content   => sub {
+      my ($request) = @_;
+
+      # requests be made with various caching options
+      # prioritizing to make use of if-not-modified-since and etag and misc caching
+      # stuff
     },
   );
 
-  $monitor->activate( $loop );
+  $loop->add($monitor);
+  $monitor->activate($loop);
 
 =head1 AUTHOR
 

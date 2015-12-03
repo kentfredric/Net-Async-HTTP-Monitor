@@ -12,6 +12,7 @@ META.yml
 Makefile.PL
 README
 dist.ini
+dist.ini.meta
 example/metacpan.feed.pl
 lib/Net/Async/HTTP/Monitor.pm
 maint/perlcritic.rc.gen.pl

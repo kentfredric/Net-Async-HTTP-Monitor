@@ -126,6 +126,17 @@
       }
    },
    "release_status" : "stable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/kentfredric/Net-Async-HTTP-Monitor/issues"
+      },
+      "homepage" : "https://github.com/kentfredric/Net-Async-HTTP-Monitor",
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/kentfredric/Net-Async-HTTP-Monitor.git",
+         "web" : "https://github.com/kentfredric/Net-Async-HTTP-Monitor"
+      }
+   },
    "version" : "0.001000",
    "x_BuiltWith" : {
       "external_file" : "misc/built_with.json"

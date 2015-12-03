@@ -29,4 +29,8 @@ requires:
   strict: '0'
   subs: '0'
   warnings: '0'
+resources:
+  bugtracker: https://github.com/kentfredric/Net-Async-HTTP-Monitor/issues
+  homepage: https://github.com/kentfredric/Net-Async-HTTP-Monitor
+  repository: https://github.com/kentfredric/Net-Async-HTTP-Monitor.git
 version: '0.001000'
