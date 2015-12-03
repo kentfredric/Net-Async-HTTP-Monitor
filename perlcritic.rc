@@ -165,11 +165,11 @@ spell_command = aspell list --lang en_US
 
 [-Editor::RequireEmacsFileVariables]
 
-[ErrorHandling::RequireCarping]
+[-ErrorHandling::RequireCarping]
 
 [ErrorHandling::RequireCheckingReturnValueOfEval]
 
-[ErrorHandling::RequireUseOfExceptions]
+[-ErrorHandling::RequireUseOfExceptions]
 
 [InputOutput::ProhibitBacktickOperators]
 
