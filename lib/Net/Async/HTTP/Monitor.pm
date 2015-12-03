@@ -222,8 +222,11 @@ version 0.001000
     },
   );
 
+  $monitor->start;
+
   $loop->add($monitor);
-  $monitor->activate($loop);
+
+  $loop->run;
 
 =head1 AUTHOR
 
