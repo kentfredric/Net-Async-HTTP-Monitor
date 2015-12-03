@@ -18,10 +18,10 @@ my %WriteMakefileArgs = (
   "NAME" => "Net::Async::HTTP::Monitor",
   "PREREQ_PM" => {
     "Carp" => 0,
-    "Class::Tiny" => 0,
+    "IO::Async::Notifier" => 0,
     "IO::Async::Timer::Periodic" => 0,
+    "parent" => 0,
     "strict" => 0,
-    "subs" => 0,
     "warnings" => 0
   },
   "TEST_REQUIRES" => {
@@ -38,13 +38,13 @@ my %WriteMakefileArgs = (
 
 my %FallbackPrereqs = (
   "Carp" => 0,
-  "Class::Tiny" => 0,
   "ExtUtils::MakeMaker" => 0,
   "File::Spec" => 0,
+  "IO::Async::Notifier" => 0,
   "IO::Async::Timer::Periodic" => 0,
   "Test::More" => "0.89",
+  "parent" => 0,
   "strict" => 0,
-  "subs" => 0,
   "warnings" => 0
 );
 
