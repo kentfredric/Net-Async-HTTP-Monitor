@@ -153,7 +153,7 @@ sub _add_setter {
 }
 
 sub _add_predicate {
-  my ( $class, $name, %spec ) = @_;
+  my ( $class, $name,  ) = @_;
   return $class->_set_sub(
     $class->_prefix_name( 'has', $name ),    # has_foo and _has_foo
     sub { exists $_[0]->{ $class . q[/] . $name } },
@@ -161,7 +161,7 @@ sub _add_predicate {
 }
 
 sub _add_sub_proxy {
-  my ( $class, $name, $code ) = @_;
+  my ( $class, $name  ) = @_;
   $ARGS{$class}{$name} = $class . q[/] . $name;
   return $class->_set_sub(
     $name => sub {
