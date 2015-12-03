@@ -82,11 +82,11 @@ do { my $x = {
        'runtime' => {
                       'requires' => {
                                       'Carp' => '0',
-                                      'Class::Tiny' => '0',
+                                      'IO::Async::Notifier' => '0',
                                       'IO::Async::Timer::Periodic' => '0',
+                                      'parent' => '0',
                                       'perl' => '5.006',
                                       'strict' => '0',
-                                      'subs' => '0',
                                       'warnings' => '0'
                                     }
                     },
