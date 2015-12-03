@@ -77,7 +77,7 @@ my $CLASS_PARAMS = [
 
 my $MESSAGES = {
   'no_http'    => 'Attribute `http` is required, and should be a NAHTTP client',
-  'no_request' => 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required';
+  'no_request' => 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required',
 };
 
 sub configure {
