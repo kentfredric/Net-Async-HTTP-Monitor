@@ -71,7 +71,6 @@
       "Test::Pod" : "1.51",
       "Test::Pod::Coverage" : "1.10",
       "URI" : "1.69",
-      "constant" : "1.33",
       "parent" : "0.234",
       "strict" : "1.09",
       "warnings" : "1.32"

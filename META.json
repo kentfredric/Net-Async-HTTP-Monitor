@@ -102,7 +102,6 @@
             "IO::Async::Timer::Periodic" : "0",
             "Safe::Isa" : "0",
             "URI" : "0",
-            "constant" : "0",
             "parent" : "0",
             "perl" : "5.006",
             "strict" : "0",

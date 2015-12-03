@@ -31,8 +31,8 @@ __PACKAGE__->_add_accessor( first_interval => default => sub { 0 } );
 __PACKAGE__->_add_accessor(
   initial_request => (
     default   => sub { $_[0]->_uri_to_get( $_[0]->uri ) },
-    predicate => 1
-  )
+    predicate => 1,
+  ),
 );
 __PACKAGE__->_add_accessor(
   timer => default => sub {
@@ -51,17 +51,16 @@ __PACKAGE__->_add_accessor( _active        => init_arg => undef, setter => 1 );
 __PACKAGE__->_add_accessor( _last_request  => init_arg => undef, setter => 1, predicate => 1 );
 __PACKAGE__->_add_accessor( _last_response => init_arg => undef, setter => 1, predicate => 1 );
 
-use constant _MESSAGE_no_http    => 'Attribute `http` is required, and should be a NAHTTP client';
-use constant _MESSAGE_no_request => 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required';
-
 sub configure {
   my ( $self, %params ) = @_;
 
   __PACKAGE__->_swallow_constructor_args( $self, \%params );
 
-  $self->has_http or die _MESSAGE_no_http();
+  die 'Attribute `http` is required, and should be a NAHTTP client'
+    unless $self->has_http;
 
-  $self->has_uri or $self->has_initial_request or die _MESSAGE_no_request();
+  die 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required'
+    unless $self->has_uri or $self->has_initial_request;
 
   return $self->SUPER::configure(%params);
 }
