@@ -337,7 +337,7 @@ private_name_regex = _(?!build_)\w
 
 [-Subroutines::RequireArgUnpacking]
 
-[Subroutines::RequireFinalReturn]
+[-Subroutines::RequireFinalReturn]
 
 [TestingAndDebugging::ProhibitNoStrict]
 
