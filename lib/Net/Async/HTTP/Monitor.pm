@@ -11,14 +11,17 @@ our $VERSION = '0.001000';
 our $AUTHORITY = 'cpan:KENTNL'; # AUTHORITY
 
 use IO::Async::Timer::Periodic;
+use Safe::Isa qw( $_isa );
 
 use parent 'IO::Async::Notifier';
 
 # Logging functions constructed later
+## no critic (ProhibitSubroutinePrototypes)
 sub log_info(&@);
 sub log_debug(&@);
 sub log_trace(&@);
-
+## use critic
+#
 # This this sort of crap you have to pull when you don't have a MOP
 # and can't subclass with Moo/C:Tiny. Also, these would be really nice as macros :(
 
@@ -27,8 +30,8 @@ my ( $SET_ATTR, $GET_ATTR, $HAS_ATTR, $ATTR_TRUE, $MAYBE_CALL );    # Predeclare
   my $DEFAULTS = {
     first_interval   => sub { 0 },
     refresh_interval => sub { 60 },
-    initial_request  => sub { ( { $_[0]->http->_make_request_for_uri( $_[0]->uri ) } )->{request} },
-    timer => sub {
+    initial_request  => sub { $_[0]->_uri_to_get( $_[0]->uri ) },
+    timer            => sub {
       my ($self) = @_;
       require IO::Async::Timer::Periodic;
       my $timer = $self->$SET_ATTR(
@@ -36,7 +39,7 @@ my ( $SET_ATTR, $GET_ATTR, $HAS_ATTR, $ATTR_TRUE, $MAYBE_CALL );    # Predeclare
           interval       => $self->refresh_interval,
           first_interval => $self->first_interval,
           on_tick        => sub { $self->_on_tick(@_) },
-        )
+        ),
       );
       $self->add_child($timer);
       $timer;
@@ -82,7 +85,7 @@ sub configure {
 }
 
 sub start {
-  my ( $self ) = @_;
+  my ($self) = @_;
   log_trace { "starting timer $self" };
   $self->timer->start;
 }
@@ -156,6 +159,24 @@ sub _on_tick {
   log_trace { "$self tick" };
   return $self->_primary_query if not $self->$HAS_ATTR('last_request');
   return $self->_refresh_query;
+}
+
+sub _uri_to_get {
+  my ( $self, $uri ) = @_;
+  if ( !$uri->$_isa('URI') ) {
+    die '`uri` must be a URI or a scalar' if ref $uri;
+    require URI;
+    $uri = URI->new($uri);
+  }
+  require HTTP::Request;
+  my $request = HTTP::Request->new( 'GET', $uri );
+  $request->protocol("HTTP/1.1");
+  $request->header( Host => $uri->host );
+
+  if ( defined $uri->userinfo ) {
+    $request->authorization_basic( split m/:/, $uri->userinfo, 2 );
+  }
+  return $request;
 }
 
 sub _dispatch_request {
