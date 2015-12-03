@@ -82,7 +82,7 @@ sub configure {
 }
 
 sub start {
-  my ( $self, $loop ) = @_;
+  my ( $self ) = @_;
   log_trace { "starting timer $self" };
   $self->timer->start;
 }
