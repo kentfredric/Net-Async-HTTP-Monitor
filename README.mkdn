@@ -1,0 +1,47 @@
+# NAME
+
+Net::Async::HTTP::Monitor - Stalk a HTTP URI efficiently and invoke code when it changes
+
+# VERSION
+
+version 0.001000
+
+# SYNOPSIS
+
+    use IO::Async::Loop;
+    use Net::Async::HTTP::Monitor;
+
+    my $loop = IO::Async::Loop->new();
+    my $http = Net::Async::HTTP->new();
+
+    $loop->add($http);
+
+    my $monitor = Net::Async::HTTP::Monitor->new(
+      http             => $http,
+      uri              => 'http://example.org/some-infrequently-changed-page',
+      refresh_interval => 60,
+      on_new_content   => sub {
+        my ($request) = @_;
+
+        # requests be made with various caching options
+        # prioritizing to make use of if-not-modified-since and etag and misc caching
+        # stuff
+      },
+    );
+
+    $monitor->start;
+
+    $loop->add($monitor);
+
+    $loop->run;
+
+# AUTHOR
+
+Kent Fredric &lt;kentnl@cpan.org>
+
+# COPYRIGHT AND LICENSE
+
+This software is copyright (c) 2015 by Kent Fredric &lt;kentfredric@gmail.com>.
+
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
