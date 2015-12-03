@@ -162,7 +162,7 @@ sub _on_tick {
 }
 
 sub _uri_to_get {
-  my ( $self, $uri ) = @_;
+  my ( $uri ) = $_[1];
   if ( !$uri->$_isa('URI') ) {
     die '`uri` must be a URI or a scalar' if ref $uri;
     require URI;
@@ -170,11 +170,11 @@ sub _uri_to_get {
   }
   require HTTP::Request;
   my $request = HTTP::Request->new( 'GET', $uri );
-  $request->protocol("HTTP/1.1");
+  $request->protocol('HTTP/1.1');
   $request->header( Host => $uri->host );
 
   if ( defined $uri->userinfo ) {
-    $request->authorization_basic( split m/:/, $uri->userinfo, 2 );
+    $request->authorization_basic( split m/:/, $uri->userinfo, 2 ); ## no critic (RegularExpressions)
   }
   return $request;
 }
@@ -203,24 +203,24 @@ sub _dispatch_request {
 
 sub _primary_query {
   my ($self) = @_;
-  log_trace { "inital request" };
+  log_trace { '_primary_query' };
   $self->_dispatch_request( $self->initial_request );
 }
 
 sub _refresh_query {
   my ($self) = @_;
-  log_trace { "refresh" };
+  log_trace { '_refresh_query' };
   $self->_dispatch_request( $self->_refresh_request );
 }
 
 sub _refresh_request {
   my ($self) = @_;
-  log_trace { "generate refresh request" };
+  log_trace { '_refresh_request' };
 
   my $req  = $self->$GET_ATTR('last_request')->clone;
   my $resp = $self->$GET_ATTR('last_response');
 
-  return $req if $resp->code =~ /\A[34]0\d\z/;
+  return $req if $resp->code =~ / \A [34]0\d \z/sx;
 
   if ( my $date = $resp->header('date') ) {
     $req->header( 'if-modified-since', $date );
