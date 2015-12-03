@@ -53,8 +53,8 @@ my ( $SET_ATTR, $GET_ATTR, $HAS_ATTR, $ATTR_TRUE, $MAYBE_CALL );    # Predeclare
   $SET_ATTR = sub { $_[0]->{ __PACKAGE__ . q[/] . $_[1] } = $_[2] };
   $HAS_ATTR = sub { exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } };
   $ATTR_TRUE = sub {
-    exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] }
-      and return !!$_[0]->{ __PACKAGE__ . q[/] . $_[1] };
+    return unless exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] };
+    return !!$_[0]->{ __PACKAGE__ . q[/] . $_[1] };
   };
   $MAYBE_CALL = sub {    # Ghostbusters
     exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] }
