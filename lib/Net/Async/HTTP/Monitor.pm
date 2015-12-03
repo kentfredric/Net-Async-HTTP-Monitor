@@ -147,7 +147,7 @@ sub _add_setter {
   my ( $class, $name, %spec ) = @_;
   my $iname = $spec{iname} || $name;
   return $class->_set_sub(
-    $self->_prefix_name( 'set', $name ),    # set_foo and _set_foo
+    $class->_prefix_name( 'set', $name ),    # set_foo and _set_foo
     sub { $_[0]->{ $class . q[/] . $iname } = $_[1] },
   );
 }
@@ -155,7 +155,7 @@ sub _add_setter {
 sub _add_predicate {
   my ( $class, $name, %spec ) = @_;
   return $class->_set_sub(
-    $self->_prefix_name( 'has', $name ),    # has_foo and _has_foo
+    $class->_prefix_name( 'has', $name ),    # has_foo and _has_foo
     sub { exists $_[0]->{ $class . q[/] . $name } },
   );
 }
