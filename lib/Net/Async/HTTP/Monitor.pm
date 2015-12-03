@@ -14,21 +14,57 @@ use IO::Async::Timer::Periodic;
 
 use parent 'IO::Async::Notifier';
 
+# Logging functions constructed later
+sub log_info(&@);
+sub log_debug(&@);
+sub log_trace(&@);
+
 # This this sort of crap you have to pull when you don't have a MOP
 # and can't subclass with Moo/C:Tiny. Also, these would be really nice as macros :(
-my $GET_ATTR = sub { $_[0]->{ __PACKAGE__ . q[/] . $_[1] } };
-my $HAS_ATTR = sub { exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } };
-my $SET_ATTR = sub { $_[0]->{ __PACKAGE__ . q[/] . $_[1] } = $_[2] };
-my $DEFAULT_ATTR = sub {
-  return $_[0]->$GET_ATTR( $_[1] ) if $_[0]->$HAS_ATTR( $_[1] );
-  $_[0]->$SET_ATTR( $_[1], $_[2]->( $_[0] ) );
-};
-my $ATTR_TRUE = sub { $_[0]->$HAS_ATTR( $_[1] ) and !!$_[0]->$GET_ATTR( $_[1] ) };
-my $MAYBE_CALL = sub {
-  my ( $self, $attrname, @args ) = @_;
-  return unless $self->$HAS_ATTR($attrname);
-  return $self->$GET_ATTR($attrname)->(@args);
-};
+
+my ( $SET_ATTR, $GET_ATTR, $HAS_ATTR, $ATTR_TRUE, $MAYBE_CALL );    # Predeclared private subs
+{
+  my $DEFAULTS = {
+    first_interval   => sub { 0 },
+    refresh_interval => sub { 60 },
+    initial_request  => sub { ( { $_[0]->http->_make_request_for_uri( $_[0]->uri ) } )->{request} },
+    timer => sub {
+      my ($self) = @_;
+      require IO::Async::Timer::Periodic;
+      my $timer = $self->$SET_ATTR(
+        'timer' => IO::Async::Timer::Periodic->new(
+          interval       => $self->refresh_interval,
+          first_interval => $self->first_interval,
+          on_tick        => sub { $self->_on_tick(@_) },
+        )
+      );
+      $self->add_child($timer);
+      $timer;
+    },
+  };
+  $GET_ATTR = sub {
+    exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } and return $_[0]->{ __PACKAGE__ . q[/] . $_[1] };
+    return unless exists $DEFAULTS->{ $_[1] };
+    return $_[0]->{ __PACKAGE__ . q[/] . $_[1] } = $DEFAULTS->{ $_[1] }->( $_[0] );
+  };
+  $SET_ATTR = sub { $_[0]->{ __PACKAGE__ . q[/] . $_[1] } = $_[2] };
+  $HAS_ATTR = sub { exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } };
+  $ATTR_TRUE = sub {
+    exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] }
+      and return !!$_[0]->{ __PACKAGE__ . q[/] . $_[1] };
+  };
+  $MAYBE_CALL = sub {    # Ghostbusters
+    exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] }
+      and return $_[0]->{ __PACKAGE__ . q[/] . $_[1] }->( @_[ 2 .. $#_ ] );
+  };
+}
+
+sub http             { $_[0]->$GET_ATTR('http') }
+sub uri              { $_[0]->$GET_ATTR('uri') }
+sub timer            { $_[0]->$GET_ATTR('timer') }
+sub first_interval   { $_[0]->$GET_ATTR('first_interval') }
+sub refresh_interval { $_[0]->$GET_ATTR('refresh_interval') }
+sub initial_request  { $_[0]->$GET_ATTR('initial_request') }
 
 sub configure {
   my ( $self, %params ) = @_;
@@ -45,43 +81,59 @@ sub configure {
   return $self->SUPER::configure(%params);
 }
 
-sub http { $_[0]->$GET_ATTR('http') }
-sub uri  { $_[0]->$GET_ATTR('uri') }
+sub start {
+  my ( $self, $loop ) = @_;
+  log_trace { "starting timer $self" };
+  $self->timer->start;
+}
 
-sub timer {
-  my ($self) = @_;
-  $self->$DEFAULT_ATTR(
-    'timer' => sub {
-      require IO::Async::Timer::Periodic;
-      my $timer = $self->$SET_ATTR(
-        'timer' => IO::Async::Timer::Periodic->new(
-          interval       => $self->refresh_interval,
-          first_interval => $self->first_interval,
-          on_tick        => sub { $self->_on_tick(@_) },
-        )
-      );
-      IO::Async::Notifier::add_child( $self, $timer );
-      $timer;
+sub on_updated_chunk {
+  my ( $self, $response, @chunk ) = @_;
+  $self->$MAYBE_CALL( 'on_updated_chunk', $response, @chunk );
+}
+
+sub on_header {
+  my ( $self, $response ) = @_;
+  log_trace { "Header event" };
+  return sub {
+    $self->on_updated_chunk( $response, @_ );
+    if (@_) {
+      $response->add_content(@_);
     }
-  );
+    else {
+      return $response;
+    }
+  };
 }
 
-sub first_interval {
-  $_[0]->$DEFAULT_ATTR( 'first_interval' => sub { 0 } );
+sub on_updated {
+  my ( $self, $response ) = @_;
+  log_trace { "on_updated" };
+  $self->$MAYBE_CALL( 'on_updated', $response );
 }
 
-sub refresh_interval {
-  $_[0]->$DEFAULT_ATTR( 'refresh_interval' => sub { 60 } );
+sub on_no_content {
+  my ( $self, $response ) = @_;
+  log_trace { "on_no_content" };
+  $self->$MAYBE_CALL( 'on_no_content', $response );
 }
 
-sub initial_request {
-  my ($self) = @_;
-  $self->$DEFAULT_ATTR( 'initial_request' => sub { ( { $self->http->_make_request_for_uri( $self->uri ) } )->{request} } );
+sub on_response {
+  my ( $self, $response ) = @_;
+  log_trace { "on_response" };
+  if ( $response->is_success ) {
+    return $self->on_updated($response);
+  }
+  if ( $response->code eq '304' ) {
+    return $self->on_no_content($response);
+  }
 }
 
-sub log_info(&@);
-sub log_debug(&@);
-sub log_trace(&@);
+sub on_error {
+  my ( $self, $error ) = @_;
+  log_trace { "on_error" };
+  $self->$MAYBE_CALL( 'on_error', $error );
+}
 
 BEGIN {
 
@@ -99,26 +151,10 @@ BEGIN {
   }
 }
 
-#### This bodging is because there's no practical way
-#    to make Class::Tiny work with a parent class of IO::Async::Notifier
-#    so I'm just rolin' with it.
-sub children   { return ( $_[0]->timer ) }
-sub parent     { IO::Async::Notifier::parent( $_[0] ) }
-sub loop       { IO::Async::Notifier::loop( $_[0] ) }
-sub __set_loop { IO::Async::Notifier::__set_loop( $_[0] ) }
-
-sub start {
-  my ( $self, $loop ) = @_;
-  log_trace { "starting timer $self" };
-  $self->timer->start;
-}
-
 sub _on_tick {
   my ($self) = @_;
   log_trace { "$self tick" };
-  if ( not $self->$HAS_ATTR('last_request') ) {
-    return $self->_primary_query;
-  }
+  return $self->_primary_query if not $self->$HAS_ATTR('last_request');
   return $self->_refresh_query;
 }
 
@@ -169,54 +205,6 @@ sub _refresh_request {
     $req->header( 'if-modified-since', $date );
   }
   return $req;
-}
-
-sub on_updated_chunk {
-  my ( $self, $response, @chunk ) = @_;
-  $self->$MAYBE_CALL( 'on_updated_chunk', $response, @chunk );
-}
-
-sub on_header {
-  my ( $self, $response ) = @_;
-  log_trace { "Header event" };
-  return sub {
-    $self->on_updated_chunk( $response, @_ );
-    if (@_) {
-      $response->add_content(@_);
-    }
-    else {
-      return $response;
-    }
-  };
-}
-
-sub on_updated {
-  my ( $self, $response ) = @_;
-  log_trace { "on_updated" };
-  $self->$MAYBE_CALL( 'on_updated', $response );
-}
-
-sub on_no_content {
-  my ( $self, $response ) = @_;
-  log_trace { "on_no_content" };
-  $self->$MAYBE_CALL( 'on_no_content', $response );
-}
-
-sub on_response {
-  my ( $self, $response ) = @_;
-  log_trace { "on_response" };
-  if ( $response->is_success ) {
-    return $self->on_updated($response);
-  }
-  if ( $response->code eq '304' ) {
-    return $self->on_no_content($response);
-  }
-}
-
-sub on_error {
-  my ( $self, $error ) = @_;
-  log_trace { "on_error" };
-  $self->$MAYBE_CALL( 'on_error', $error );
 }
 
 1;
