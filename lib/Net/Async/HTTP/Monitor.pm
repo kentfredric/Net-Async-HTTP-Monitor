@@ -59,7 +59,8 @@ sub configure {
   die 'Attribute `http` is required, and should be a NAHTTP client'
     unless $self->has_http;
 
-  die 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required'
+  die 'Either attribute `uri` ( A HTTP URI )' .    #
+    ' or `request` ( an HTTP::Request ) is required'
     unless $self->has_uri or $self->has_initial_request;
 
   return $self->SUPER::configure(%params);
