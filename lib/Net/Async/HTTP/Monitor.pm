@@ -111,8 +111,8 @@ sub _swallow_constructor_args {
 
 sub _set_sub {
   my ( $class, $name, $code ) = @_;
-  no strict 'refs';
-  *{ $class . '::' . $name } = $code;
+  no strict 'refs';    ## no critic
+  *{ $class . q[::] . $name } = $code;
 }
 
 sub _add_accessor {
@@ -131,15 +131,11 @@ sub _add_accessor {
       $name => sub {
         exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name };
         $_[0]->{ $class . q[/] . $name } = $spec{default}->( $_[0] );
-      }
+      },
     );
   }
 
-  return $class->_set_sub(
-    $name => sub {
-      exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name };
-    }
-  );
+  return $class->_set_sub( $name => sub { exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name } } );
 }
 
 sub _add_setter {
