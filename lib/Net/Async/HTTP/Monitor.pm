@@ -15,87 +15,73 @@ use Safe::Isa qw( $_isa );
 
 use parent 'IO::Async::Notifier';
 
-# Logging functions constructed later
-sub log_info(&@);
-sub log_debug(&@);
-sub log_trace(&@);
-
 # This this sort of crap you have to pull when you don't have a MOP
 # and can't subclass with Moo/C:Tiny. Also, these would be really nice as macros :(
+__PACKAGE__->_add_accessor( http             => predicate => 1 );
+__PACKAGE__->_add_accessor( uri              => predicate => 1 );
+__PACKAGE__->_add_accessor( refresh_interval => default   => sub { 60 } );
 
-my ( $SET_ATTR, $GET_ATTR, $HAS_ATTR, $ATTR_TRUE, $MAYBE_CALL );    # Predeclared private subs
-{
-  my $DEFAULTS = {
-    first_interval   => sub { 0 },
-    refresh_interval => sub { 60 },
-    initial_request  => sub { $_[0]->_uri_to_get( $_[0]->uri ) },
-    timer            => sub {
-      my ($self) = @_;
-      require IO::Async::Timer::Periodic;
-      my $timer = $self->$SET_ATTR(
-        'timer' => IO::Async::Timer::Periodic->new(
-          interval       => $self->refresh_interval,
-          first_interval => $self->first_interval,
-          on_tick        => sub { $self->_on_tick(@_) },
-        )
-      );
-      $self->add_child($timer);
-      $timer;
-    },
-  };
-  $GET_ATTR = sub {
-    exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } and return $_[0]->{ __PACKAGE__ . q[/] . $_[1] };
-    return unless exists $DEFAULTS->{ $_[1] };
-    return $_[0]->{ __PACKAGE__ . q[/] . $_[1] } = $DEFAULTS->{ $_[1] }->( $_[0] );
-  };
-  $SET_ATTR = sub { $_[0]->{ __PACKAGE__ . q[/] . $_[1] } = $_[2] };
-  $HAS_ATTR = sub { exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } };
-  $ATTR_TRUE = sub {
-    exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] }
-      and return !!$_[0]->{ __PACKAGE__ . q[/] . $_[1] };
-  };
-  $MAYBE_CALL = sub {    # Ghostbusters
-    exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] }
-      and return $_[0]->{ __PACKAGE__ . q[/] . $_[1] }->( @_[ 2 .. $#_ ] );
-  };
-}
+__PACKAGE__->_add_sub_proxy('on_updated_chunk');
+__PACKAGE__->_add_sub_proxy('on_updated');
+__PACKAGE__->_add_sub_proxy('on_no_content');
+__PACKAGE__->_add_sub_proxy('on_error');
 
-sub http             { $_[0]->$GET_ATTR('http') }
-sub uri              { $_[0]->$GET_ATTR('uri') }
-sub timer            { $_[0]->$GET_ATTR('timer') }
-sub first_interval   { $_[0]->$GET_ATTR('first_interval') }
-sub refresh_interval { $_[0]->$GET_ATTR('refresh_interval') }
-sub initial_request  { $_[0]->$GET_ATTR('initial_request') }
+__PACKAGE__->_add_accessor( first_interval => default => sub { 0 } );
+
+__PACKAGE__->_add_accessor(
+  initial_request => (
+    default   => sub { $_[0]->_uri_to_get( $_[0]->uri ) },
+    predicate => 1,
+  ),
+);
+__PACKAGE__->_add_accessor(
+  timer => default => sub {
+    my ($self) = @_;
+    require IO::Async::Timer::Periodic;
+    my $timer = IO::Async::Timer::Periodic->new(
+      interval       => $self->refresh_interval,
+      first_interval => $self->first_interval,
+      on_tick        => sub { $self->_on_tick(@_) },
+    );
+    $self->add_child($timer);
+    $timer;
+  },
+);
+__PACKAGE__->_add_accessor( _active        => init_arg => undef, setter => 1 );
+__PACKAGE__->_add_accessor( _last_request  => init_arg => undef, setter => 1, predicate => 1 );
+__PACKAGE__->_add_accessor( _last_response => init_arg => undef, setter => 1, predicate => 1 );
 
 sub configure {
   my ( $self, %params ) = @_;
-  exists $params{$_}
-    and $self->$SET_ATTR( $_, delete $params{$_} )
-    for qw( on_updated_chunk on_updated on_error on_no_content
-    refresh_interval first_interval http uri reque);
 
-  $self->$HAS_ATTR('http') or die 'Attribute `http` is required, and should be a NAHTTP client';
-  $self->$HAS_ATTR('uri')
-    or $self->$HAS_ATTR('request')
-    or die 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required';
+  __PACKAGE__->_swallow_constructor_args( $self, \%params );
+
+  die 'Attribute `http` is required, and should be a NAHTTP client'
+    unless $self->has_http;
+
+  die 'Either attribute `uri` ( A HTTP URI )' .    #
+    ' or `request` ( an HTTP::Request ) is required'
+    unless $self->has_uri or $self->has_initial_request;
 
   return $self->SUPER::configure(%params);
 }
 
+# Logging functions constructed later
+## no critic (ProhibitSubroutinePrototypes)
+sub log_info(&@);
+sub log_debug(&@);
+sub log_trace(&@);
+## use critic
+
 sub start {
-  my ( $self ) = @_;
+  my ($self) = @_;
   log_trace { "starting timer $self" };
   $self->timer->start;
 }
 
-sub on_updated_chunk {
-  my ( $self, $response, @chunk ) = @_;
-  $self->$MAYBE_CALL( 'on_updated_chunk', $response, @chunk );
-}
-
 sub on_header {
   my ( $self, $response ) = @_;
-  log_trace { "Header event" };
+  log_trace { 'on_header' };
   return sub {
     $self->on_updated_chunk( $response, @_ );
     if (@_) {
@@ -107,33 +93,83 @@ sub on_header {
   };
 }
 
-sub on_updated {
-  my ( $self, $response ) = @_;
-  log_trace { "on_updated" };
-  $self->$MAYBE_CALL( 'on_updated', $response );
-}
-
-sub on_no_content {
-  my ( $self, $response ) = @_;
-  log_trace { "on_no_content" };
-  $self->$MAYBE_CALL( 'on_no_content', $response );
-}
-
 sub on_response {
   my ( $self, $response ) = @_;
-  log_trace { "on_response" };
-  if ( $response->is_success ) {
-    return $self->on_updated($response);
-  }
-  if ( $response->code eq '304' ) {
-    return $self->on_no_content($response);
-  }
+  log_trace { 'on_response' };
+
+  $response->is_success and return $self->on_updated($response);
+
+  '304' eq $response->code and return $self->on_no_content($response);
 }
 
-sub on_error {
-  my ( $self, $error ) = @_;
-  log_trace { "on_error" };
-  $self->$MAYBE_CALL( 'on_error', $error );
+our %ARGS;
+
+sub _swallow_constructor_args {
+  my ( $class, $instance, $arghash ) = @_;
+  my $argmap = $ARGS{$class};
+  exists $arghash->{$_} and $instance->{ $argmap->{$_} } = delete $arghash->{$_} for keys %{$argmap};
+}
+
+sub _set_sub {
+  my ( $class, $name, $code ) = @_;
+  no strict 'refs';    ## no critic (ProhibitNoStrict)
+  *{ $class . q[::] . $name } = $code;
+}
+
+sub _prefix_name {
+  my ( $prefix, $name ) = @_[ 1 .. $#_ ];
+  $name =~ /\A_/sx ? "_${prefix}${name}" : "${prefix}_${name}";
+}
+
+sub _add_accessor {
+  my ( $class, $name, %spec ) = @_;
+
+  $class->_add_setter($name) if $spec{setter};
+
+  $class->_add_predicate($name) if $spec{predicate};
+
+  $spec{init_arg} = $name if not exists $spec{init_arg};
+
+  $ARGS{$class}{ $spec{init_arg} } = $class . q[/] . $name if defined $spec{init_arg};
+
+  if ( $spec{default} ) {
+    return $class->_set_sub(
+      $name => sub {
+        exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name };
+        $_[0]->{ $class . q[/] . $name } = $spec{default}->( $_[0] );
+      },
+    );
+  }
+
+  return $class->_set_sub( $name => sub { exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name } } );
+}
+
+sub _add_setter {
+  my ( $class, $name, %spec ) = @_;
+  my $iname = $spec{iname} || $name;
+  return $class->_set_sub(
+    $class->_prefix_name( 'set', $name ),    # set_foo and _set_foo
+    sub { $_[0]->{ $class . q[/] . $iname } = $_[1] },
+  );
+}
+
+sub _add_predicate {
+  my ( $class, $name, ) = @_;
+  return $class->_set_sub(
+    $class->_prefix_name( 'has', $name ),    # has_foo and _has_foo
+    sub { exists $_[0]->{ $class . q[/] . $name } },
+  );
+}
+
+sub _add_sub_proxy {
+  my ( $class, $name ) = @_;
+  $ARGS{$class}{$name} = $class . q[/] . $name;
+  return $class->_set_sub(
+    $name => sub {
+      log_trace { $name };
+      exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name }->( @_[ 1 .. $#_ ] );
+    },
+  );
 }
 
 BEGIN {
@@ -155,12 +191,12 @@ BEGIN {
 sub _on_tick {
   my ($self) = @_;
   log_trace { "$self tick" };
-  return $self->_primary_query if not $self->$HAS_ATTR('last_request');
+  return $self->_primary_query if not $self->_has_last_request;
   return $self->_refresh_query;
 }
 
 sub _uri_to_get {
-  my ( $self, $uri ) = @_;
+  my ($uri) = $_[1];
   if ( !$uri->$_isa('URI') ) {
     die '`uri` must be a URI or a scalar' if ref $uri;
     require URI;
@@ -168,32 +204,32 @@ sub _uri_to_get {
   }
   require HTTP::Request;
   my $request = HTTP::Request->new( 'GET', $uri );
-  $request->protocol("HTTP/1.1");
+  $request->protocol('HTTP/1.1');
   $request->header( Host => $uri->host );
 
   if ( defined $uri->userinfo ) {
-    $request->authorization_basic( split m/:/, $uri->userinfo, 2 );
+    $request->authorization_basic( split m/:/, $uri->userinfo, 2 );    ## no critic (RegularExpressions)
   }
   return $request;
 }
 
 sub _dispatch_request {
   my ( $self, $request ) = @_;
-  return if $self->$ATTR_TRUE('active');
-  $self->$SET_ATTR( 'active',       1 );
-  $self->$SET_ATTR( 'last_request', $request );
+  return if !!$self->_active;
+  $self->_set_active(1);
+  $self->_set_last_request($request);
   $self->http->do_request(
     request   => $request,
     on_header => sub {
-      $self->$SET_ATTR( 'last_response', $_[0] );
+      $self->_set_last_response( $_[0] );
       $self->on_header(@_);
     },
     on_response => sub {
-      $self->$SET_ATTR( 'active', 0 );
+      $self->_set_active(0);
       $self->on_response(@_);
     },
     on_error => sub {
-      $self->$SET_ATTR( 'active', 0 );
+      $self->_set_active(0);
       $self->on_error(@_);
     },
   );
@@ -201,24 +237,24 @@ sub _dispatch_request {
 
 sub _primary_query {
   my ($self) = @_;
-  log_trace { "inital request" };
+  log_trace { '_primary_query' };
   $self->_dispatch_request( $self->initial_request );
 }
 
 sub _refresh_query {
   my ($self) = @_;
-  log_trace { "refresh" };
+  log_trace { '_refresh_query' };
   $self->_dispatch_request( $self->_refresh_request );
 }
 
 sub _refresh_request {
   my ($self) = @_;
-  log_trace { "generate refresh request" };
+  log_trace { '_refresh_request' };
 
-  my $req  = $self->$GET_ATTR('last_request')->clone;
-  my $resp = $self->$GET_ATTR('last_response');
+  my $req  = $self->_last_request->clone;
+  my $resp = $self->_last_response;
 
-  return $req if $resp->code =~ /\A[34]0\d\z/;
+  return $req if $resp->code =~ / \A [34]0\d \z/sx;
 
   if ( my $date = $resp->header('date') ) {
     $req->header( 'if-modified-since', $date );
