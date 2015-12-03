@@ -85,9 +85,9 @@ sub configure {
 
   exists $params{$_} and $self->$SET_ATTR( $_, delete $params{$_} ) for @{$CLASS_PARAMS};
 
-  $self->$HAS_ATTR('http') or die $MESSAGES{no_http};
+  $self->$HAS_ATTR('http') or die $MESSAGES->{no_http};
 
-  $self->$HAS_ATTR('uri') or $self->$HAS_ATTR('request') or die $MESSAGES{no_request};
+  $self->$HAS_ATTR('uri') or $self->$HAS_ATTR('request') or die $MESSAGES->{no_request};
 
   return $self->SUPER::configure(%params);
 }
