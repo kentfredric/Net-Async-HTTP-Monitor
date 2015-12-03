@@ -70,14 +70,16 @@ sub refresh_interval { $_[0]->$GET_ATTR('refresh_interval') }
 sub initial_request  { $_[0]->$GET_ATTR('initial_request') }
 
 my $CLASS_PARAMS = [
-  qw( on_updated_chunk on_updated on_error
-    on_no_content refresh_interval first_interval
-    http uri request )
+  qw( on_updated_chunk on_updated on_error ),    # line wrap holder
+  qw( on_no_content refresh_interval first_interval ),
+  qw( http uri request ),
 ];
 
 my $MESSAGES = {
-  'no_http'    => 'Attribute `http` is required, and should be a NAHTTP client',
-  'no_request' => 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required',
+  'no_http'    => sub() { 'Attribute `http` is required, and should be a NAHTTP client' },
+  'no_request' => sub() {
+    'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required';
+  }
 };
 
 sub configure {
@@ -85,9 +87,9 @@ sub configure {
 
   exists $params{$_} and $self->$SET_ATTR( $_, delete $params{$_} ) for @{$CLASS_PARAMS};
 
-  $self->$HAS_ATTR('http') or die $MESSAGES->{no_http};
+  $self->$HAS_ATTR('http') or die $MESSAGES->{no_http}->();
 
-  $self->$HAS_ATTR('uri') or $self->$HAS_ATTR('request') or die $MESSAGES->{no_request};
+  $self->$HAS_ATTR('uri') or $self->$HAS_ATTR('request') or die $MESSAGES->{no_request}->();
 
   return $self->SUPER::configure(%params);
 }
@@ -272,6 +274,8 @@ version 0.001000
   $loop->add($monitor);
 
   $loop->run;
+
+## Please see file perltidy.ERR
 
 =head1 AUTHOR
 
