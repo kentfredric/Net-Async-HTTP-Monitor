@@ -307,8 +307,6 @@ version 0.001000
 
   $loop->run;
 
-## Please see file perltidy.ERR
-
 =head1 AUTHOR
 
 Kent Fredric <kentnl@cpan.org>
