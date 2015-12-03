@@ -111,8 +111,13 @@ sub _swallow_constructor_args {
 
 sub _set_sub {
   my ( $class, $name, $code ) = @_;
-  no strict 'refs';    ## no critic
+  no strict 'refs';    ## no critic (ProhibitNoStrict)
   *{ $class . q[::] . $name } = $code;
+}
+
+sub _prefix_name {
+  my ( $prefix, $name ) = @_[ 1 .. $#_ ];
+  $name =~ /\A_/sx ? "_${prefix}${name}" : "${prefix}_${name}";
 }
 
 sub _add_accessor {
@@ -140,28 +145,19 @@ sub _add_accessor {
 
 sub _add_setter {
   my ( $class, $name, %spec ) = @_;
-  my $subname;
-  if ( $name =~ /^_/ ) {
-    $subname = "_set${name}";
-  }
-  else {
-    $subname = "set_${name}";
-  }
   my $iname = $spec{iname} || $name;
-
-  return $class->_set_sub( $subname, sub { $_[0]->{ $class . q[/] . $iname } = $_[1] } );
+  return $class->_set_sub(
+    $self->_prefix_name( 'set', $name ),    # set_foo and _set_foo
+    sub { $_[0]->{ $class . q[/] . $iname } = $_[1] },
+  );
 }
 
 sub _add_predicate {
   my ( $class, $name, %spec ) = @_;
-  my $subname;
-  if ( $name =~ /^_/ ) {
-    $subname = "_has${name}";
-  }
-  else {
-    $subname = "has_${name}";
-  }
-  return $class->_set_sub( $subname, sub { exists $_[0]->{ $class . q[/] . $name } } );
+  return $class->_set_sub(
+    $self->_prefix_name( 'has', $name ),    # has_foo and _has_foo
+    sub { exists $_[0]->{ $class . q[/] . $name } },
+  );
 }
 
 sub _add_sub_proxy {
