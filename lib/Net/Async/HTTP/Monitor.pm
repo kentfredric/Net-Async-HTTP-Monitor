@@ -69,17 +69,25 @@ sub first_interval   { $_[0]->$GET_ATTR('first_interval') }
 sub refresh_interval { $_[0]->$GET_ATTR('refresh_interval') }
 sub initial_request  { $_[0]->$GET_ATTR('initial_request') }
 
+my $CLASS_PARAMS = [
+  qw( on_updated_chunk on_updated on_error
+    on_no_content refresh_interval first_interval
+    http uri request )
+];
+
+my $MESSAGES = {
+  'no_http'    => 'Attribute `http` is required, and should be a NAHTTP client',
+  'no_request' => 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required';
+};
+
 sub configure {
   my ( $self, %params ) = @_;
-  exists $params{$_}
-    and $self->$SET_ATTR( $_, delete $params{$_} )
-    for qw( on_updated_chunk on_updated on_error on_no_content
-    refresh_interval first_interval http uri reque);
 
-  $self->$HAS_ATTR('http') or die 'Attribute `http` is required, and should be a NAHTTP client';
-  $self->$HAS_ATTR('uri')
-    or $self->$HAS_ATTR('request')
-    or die 'Either attribute `uri` ( A HTTP URI ) or `request` ( an HTTP::Request ) is required';
+  exists $params{$_} and $self->$SET_ATTR( $_, delete $params{$_} ) for @{$CLASS_PARAMS};
+
+  $self->$HAS_ATTR('http') or die $MESSAGES{no_http};
+
+  $self->$HAS_ATTR('uri') or $self->$HAS_ATTR('request') or die $MESSAGES{no_request};
 
   return $self->SUPER::configure(%params);
 }
@@ -90,10 +98,7 @@ sub start {
   $self->timer->start;
 }
 
-sub on_updated_chunk {
-  my ( $self, $response, @chunk ) = @_;
-  $self->$MAYBE_CALL( 'on_updated_chunk', $response, @chunk );
-}
+sub on_updated_chunk { $_[0]->$MAYBE_CALL( 'on_updated_chunk', @_[ 1 .. $#_ ] ) }
 
 sub on_header {
   my ( $self, $response ) = @_;
@@ -110,32 +115,27 @@ sub on_header {
 }
 
 sub on_updated {
-  my ( $self, $response ) = @_;
   log_trace { 'on_updated' };
-  $self->$MAYBE_CALL( 'on_updated', $response );
+  $_[0]->$MAYBE_CALL( 'on_updated', @_[ 1 .. $#_ ] );
 }
 
 sub on_no_content {
-  my ( $self, $response ) = @_;
   log_trace { 'on_no_content' };
-  $self->$MAYBE_CALL( 'on_no_content', $response );
+  $_[0]->$MAYBE_CALL( 'on_no_content', @_[ 1 .. $#_ ] );
 }
 
 sub on_response {
   my ( $self, $response ) = @_;
   log_trace { 'on_response' };
-  if ( $response->is_success ) {
-    return $self->on_updated($response);
-  }
-  if ( '304' eq $response->code ) {
-    return $self->on_no_content($response);
-  }
+
+  $response->is_success and return $self->on_updated($response);
+
+  '304' eq $response->code and return $self->on_no_content($response);
 }
 
 sub on_error {
-  my ( $self, $error ) = @_;
   log_trace { 'on_error' };
-  $self->$MAYBE_CALL( 'on_error', $error );
+  $_[0]->$MAYBE_CALL( 'on_error', @_[ 1 .. $#_ ] );
 }
 
 BEGIN {
@@ -162,7 +162,7 @@ sub _on_tick {
 }
 
 sub _uri_to_get {
-  my ( $uri ) = $_[1];
+  my ($uri) = $_[1];
   if ( !$uri->$_isa('URI') ) {
     die '`uri` must be a URI or a scalar' if ref $uri;
     require URI;
@@ -174,7 +174,7 @@ sub _uri_to_get {
   $request->header( Host => $uri->host );
 
   if ( defined $uri->userinfo ) {
-    $request->authorization_basic( split m/:/, $uri->userinfo, 2 ); ## no critic (RegularExpressions)
+    $request->authorization_basic( split m/:/, $uri->userinfo, 2 );    ## no critic (RegularExpressions)
   }
   return $request;
 }
