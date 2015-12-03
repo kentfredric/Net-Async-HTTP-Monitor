@@ -16,13 +16,34 @@ use parent 'IO::Async::Notifier';
 
 # This this sort of crap you have to pull when you don't have a MOP
 # and can't subclass with Moo/C:Tiny. Also, these would be really nice as macros :(
-my $GET_ATTR = sub { $_[0]->{ __PACKAGE__ . q[/] . $_[1] } };
-my $HAS_ATTR = sub { exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } };
+
 my $SET_ATTR = sub { $_[0]->{ __PACKAGE__ . q[/] . $_[1] } = $_[2] };
-my $DEFAULT_ATTR = sub {
-  return $_[0]->$GET_ATTR( $_[1] ) if $_[0]->$HAS_ATTR( $_[1] );
-  $_[0]->$SET_ATTR( $_[1], $_[2]->( $_[0] ) );
+
+my $DEFAULTS = {
+  first_interval   => sub { 0 },
+  refresh_interval => sub { 60 },
+  initial_request  => sub { ( { $_[0]->http->_make_request_for_uri( $_[0]->uri ) } )->{request} },
+  timer => sub {
+    my ( $self ) = @_;
+  require IO::Async::Timer::Periodic;
+  my $timer = $self->$SET_ATTR(
+    'timer' => IO::Async::Timer::Periodic->new(
+      interval       => $self->refresh_interval,
+      first_interval => $self->first_interval,
+      on_tick        => sub { $self->_on_tick(@_) },
+    )
+  );
+  $self->add_child($timer);
+  $timer;
+
+  },
 };
+my $GET_ATTR = sub {
+  exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } and return $_[0]->{ __PACKAGE__ . q[/] . $_[1] };
+  return unless exists $DEFAULTS->{ $_[1] };
+  return $_[0]->{ __PACKAGE__ . q[/] . $_[1] } = $DEFAULTS->{ $_[1] }->( $_[0] );
+};
+my $HAS_ATTR = sub { exists $_[0]->{ __PACKAGE__ . q[/] . $_[1] } };
 my $ATTR_TRUE = sub { $_[0]->$HAS_ATTR( $_[1] ) and !!$_[0]->$GET_ATTR( $_[1] ) };
 my $MAYBE_CALL = sub {
   my ( $self, $attrname, @args ) = @_;
@@ -45,39 +66,12 @@ sub configure {
   return $self->SUPER::configure(%params);
 }
 
-sub http { $_[0]->$GET_ATTR('http') }
-sub uri  { $_[0]->$GET_ATTR('uri') }
-
-sub timer {
-  my ($self) = @_;
-  $self->$DEFAULT_ATTR(
-    'timer' => sub {
-      require IO::Async::Timer::Periodic;
-      my $timer = $self->$SET_ATTR(
-        'timer' => IO::Async::Timer::Periodic->new(
-          interval       => $self->refresh_interval,
-          first_interval => $self->first_interval,
-          on_tick        => sub { $self->_on_tick(@_) },
-        )
-      );
-      IO::Async::Notifier::add_child( $self, $timer );
-      $timer;
-    }
-  );
-}
-
-sub first_interval {
-  $_[0]->$DEFAULT_ATTR( 'first_interval' => sub { 0 } );
-}
-
-sub refresh_interval {
-  $_[0]->$DEFAULT_ATTR( 'refresh_interval' => sub { 60 } );
-}
-
-sub initial_request {
-  my ($self) = @_;
-  $self->$DEFAULT_ATTR( 'initial_request' => sub { ( { $self->http->_make_request_for_uri( $self->uri ) } )->{request} } );
-}
+sub http             { $_[0]->$GET_ATTR('http') }
+sub uri              { $_[0]->$GET_ATTR('uri') }
+sub timer            { $_[0]->$GET_ATTR('timer') }
+sub first_interval   { $_[0]->$GET_ATTR('first_interval') }
+sub refresh_interval { $_[0]->$GET_ATTR('refresh_interval') }
+sub initial_request  { $_[0]->$GET_ATTR('initial_request') }
 
 sub log_info(&@);
 sub log_debug(&@);
@@ -98,14 +92,6 @@ BEGIN {
     *log_trace = sub (&@) { };
   }
 }
-
-#### This bodging is because there's no practical way
-#    to make Class::Tiny work with a parent class of IO::Async::Notifier
-#    so I'm just rolin' with it.
-sub children   { return ( $_[0]->timer ) }
-sub parent     { IO::Async::Notifier::parent( $_[0] ) }
-sub loop       { IO::Async::Notifier::loop( $_[0] ) }
-sub __set_loop { IO::Async::Notifier::__set_loop( $_[0] ) }
 
 sub start {
   my ( $self, $loop ) = @_;
