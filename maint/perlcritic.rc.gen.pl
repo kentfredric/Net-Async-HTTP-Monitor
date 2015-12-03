@@ -31,6 +31,7 @@ for my $wordlist (@stopwords) {
 #$bundle->remove_policy('ErrorHandling::RequireCarping');
 #$bundle->remove_policy('NamingConventions::Capitalization');
 $bundle->remove_policy('Subroutines::RequireArgUnpacking');
+$bundle->remove_policy('Subroutines::RequireFinalReturn');
 
 my $inf = $bundle->actionlist->get_inflated;
 
