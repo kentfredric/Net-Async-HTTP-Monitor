@@ -97,7 +97,7 @@ sub on_updated_chunk {
 
 sub on_header {
   my ( $self, $response ) = @_;
-  log_trace { "Header event" };
+  log_trace { 'on_header' };
   return sub {
     $self->on_updated_chunk( $response, @_ );
     if (@_) {
@@ -111,30 +111,30 @@ sub on_header {
 
 sub on_updated {
   my ( $self, $response ) = @_;
-  log_trace { "on_updated" };
+  log_trace { 'on_updated' };
   $self->$MAYBE_CALL( 'on_updated', $response );
 }
 
 sub on_no_content {
   my ( $self, $response ) = @_;
-  log_trace { "on_no_content" };
+  log_trace { 'on_no_content' };
   $self->$MAYBE_CALL( 'on_no_content', $response );
 }
 
 sub on_response {
   my ( $self, $response ) = @_;
-  log_trace { "on_response" };
+  log_trace { 'on_response' };
   if ( $response->is_success ) {
     return $self->on_updated($response);
   }
-  if ( $response->code eq '304' ) {
+  if ( '304' eq $response->code ) {
     return $self->on_no_content($response);
   }
 }
 
 sub on_error {
   my ( $self, $error ) = @_;
-  log_trace { "on_error" };
+  log_trace { 'on_error' };
   $self->$MAYBE_CALL( 'on_error', $error );
 }
 
