@@ -106,12 +106,12 @@ our %ARGS;
 sub _swallow_constructor_args {
   my ( $class, $instance, $arghash ) = @_;
   my $argmap = $ARGS{$class};
-  exists $arghash->{$_} and $instance->{ $argmap->{$_} } = delete $arghash->{$_} for keys %$argmap;
+  exists $arghash->{$_} and $instance->{ $argmap->{$_} } = delete $arghash->{$_} for keys %{$argmap};
 }
 
 sub _set_sub {
   my ( $class, $name, $code ) = @_;
-  no strict;
+  no strict 'refs';
   *{ $class . '::' . $name } = $code;
 }
 
