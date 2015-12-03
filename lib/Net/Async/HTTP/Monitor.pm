@@ -11,6 +11,7 @@ our $VERSION = '0.001000';
 # AUTHORITY
 
 use IO::Async::Timer::Periodic;
+use Safe::Isa qw( $_isa );
 
 use parent 'IO::Async::Notifier';
 
@@ -27,8 +28,8 @@ my ( $SET_ATTR, $GET_ATTR, $HAS_ATTR, $ATTR_TRUE, $MAYBE_CALL );    # Predeclare
   my $DEFAULTS = {
     first_interval   => sub { 0 },
     refresh_interval => sub { 60 },
-    initial_request  => sub { ( { $_[0]->http->_make_request_for_uri( $_[0]->uri ) } )->{request} },
-    timer => sub {
+    initial_request  => sub { $_[0]->_uri_to_get( $_[0]->uri ) },
+    timer            => sub {
       my ($self) = @_;
       require IO::Async::Timer::Periodic;
       my $timer = $self->$SET_ATTR(
@@ -156,6 +157,24 @@ sub _on_tick {
   log_trace { "$self tick" };
   return $self->_primary_query if not $self->$HAS_ATTR('last_request');
   return $self->_refresh_query;
+}
+
+sub _uri_to_get {
+  my ( $self, $uri ) = @_;
+  if ( !$uri->$_isa('URI') ) {
+    die '`uri` must be a URI or a scalar' if ref $uri;
+    require URI;
+    $uri = URI->new($uri);
+  }
+  require HTTP::Request;
+  my $request = HTTP::Request->new( 'GET', $uri );
+  $request->protocol("HTTP/1.1");
+  $request->header( Host => $uri->host );
+
+  if ( defined $uri->userinfo ) {
+    $request->authorization_basic( split m/:/, $uri->userinfo, 2 );
+  }
+  return $request;
 }
 
 sub _dispatch_request {
