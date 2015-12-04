@@ -21,9 +21,9 @@ my %WriteMakefileArgs = (
     "HTTP::Request" => 0,
     "IO::Async::Notifier" => 0,
     "IO::Async::Timer::Periodic" => 0,
+    "Moo" => 0,
     "Safe::Isa" => 0,
     "URI" => 0,
-    "parent" => 0,
     "strict" => 0,
     "warnings" => 0
   },
@@ -46,10 +46,10 @@ my %FallbackPrereqs = (
   "HTTP::Request" => 0,
   "IO::Async::Notifier" => 0,
   "IO::Async::Timer::Periodic" => 0,
+  "Moo" => 0,
   "Safe::Isa" => 0,
   "Test::More" => "0.89",
   "URI" => 0,
-  "parent" => 0,
   "strict" => 0,
   "warnings" => 0
 );
