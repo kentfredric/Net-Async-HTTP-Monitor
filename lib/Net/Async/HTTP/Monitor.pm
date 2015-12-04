@@ -93,18 +93,9 @@ sub BUILD {
 # This evil code has to delete all the attributes Moo picks up
 # or IO::A:Notifier will cry about extra arguments.
 sub FOREIGNBUILDARGS {
-  my $argshash = { ( ref $_[1] ) ? %{ $_[1] } : @_[ 1 .. $#_ ] };
-  my $attrspecs = Moo->_constructor_maker_for(__PACKAGE__)->all_attribute_specs;
-  while ( my ( $attr, $spec ) = each %{$attrspecs} ) {
-    if ( not exists $spec->{init_arg} ) {
-      delete $argshash->{$attr};
-      next;
-    }
-    next if not defined $spec->{init_arg};
-    delete $argshash->{ $spec->{init_arg} };
-  }
-  %{$argshash};
+  ( ref $_[1] ) ? %{ $_[1] } : @_[ 1 .. $#_ ];
 }
+sub configure_unknown { return }    # disable croak on unknown params
 
 sub _add_sub_proxy {
   my ( $class, $name ) = @_;
@@ -115,7 +106,7 @@ sub _add_sub_proxy {
     log_trace { $name };
     $_[0]->$pred_method() and return $_[0]->$attr_name()->( @_[ 1 .. $#_ ] );
   };
-  no strict 'refs';    ## no critic (ProhibitNoStrict)
+  no strict 'refs';                 ## no critic (ProhibitNoStrict)
   *{ $class . q[::] . $name } = $code;
 }
 
