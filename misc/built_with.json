@@ -60,6 +60,7 @@
       "HTTP::Request" : "6.11",
       "IO::Async::Notifier" : "0.69",
       "IO::Async::Timer::Periodic" : "0.69",
+      "Moo" : "2.000002",
       "Pod::Coverage::TrustPod" : "0.100003",
       "Safe::Isa" : "1.000005",
       "Software::License::Perl_5" : "0.103010",
@@ -71,7 +72,6 @@
       "Test::Pod" : "1.51",
       "Test::Pod::Coverage" : "1.10",
       "URI" : "1.69",
-      "parent" : "0.234",
       "strict" : "1.09",
       "warnings" : "1.32"
    },

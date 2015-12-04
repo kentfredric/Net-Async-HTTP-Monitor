@@ -9,33 +9,30 @@ our $VERSION = '0.001000';
 # ABSTRACT: Stalk a HTTP URI efficiently and invoke code when it changes
 
 our $AUTHORITY = 'cpan:KENTNL'; # AUTHORITY
-
+use Moo qw( has extends );
 use IO::Async::Timer::Periodic;
 use Safe::Isa qw( $_isa );
 
-use parent 'IO::Async::Notifier';
+extends 'IO::Async::Notifier';
 
-# This this sort of crap you have to pull when you don't have a MOP
-# and can't subclass with Moo/C:Tiny. Also, these would be really nice as macros :(
-__PACKAGE__->_add_accessor( http             => predicate => 1 );
-__PACKAGE__->_add_accessor( uri              => predicate => 1 );
-__PACKAGE__->_add_accessor( refresh_interval => default   => sub { 60 } );
+has http => ( is => 'ro', required  => 1 );
+has uri  => ( is => 'ro', predicate => 1 );
+has refresh_interval => ( is => ro => lazy => 1, default => sub { 60 } );
+has first_interval   => ( is => ro => lazy => 1, default => sub { 0 } );
+
+has initial_request => ( is => ro =>, lazy => 1, predicate => 1, default => sub { $_[0]->_uri_to_get( $_[0]->uri ) } );
+
+
 
 __PACKAGE__->_add_sub_proxy('on_updated_chunk');
 __PACKAGE__->_add_sub_proxy('on_updated');
 __PACKAGE__->_add_sub_proxy('on_no_content');
 __PACKAGE__->_add_sub_proxy('on_error');
 
-__PACKAGE__->_add_accessor( first_interval => default => sub { 0 } );
-
-__PACKAGE__->_add_accessor(
-  initial_request => (
-    default   => sub { $_[0]->_uri_to_get( $_[0]->uri ) },
-    predicate => 1,
-  ),
-);
-__PACKAGE__->_add_accessor(
-  timer => default => sub {
+has timer => (
+  is      => ro =>,
+  lazy    => 1,
+  default => sub {
     my ($self) = @_;
     require IO::Async::Timer::Periodic;
     my $timer = IO::Async::Timer::Periodic->new(
@@ -47,24 +44,10 @@ __PACKAGE__->_add_accessor(
     $timer;
   },
 );
-__PACKAGE__->_add_accessor( _active        => init_arg => undef, setter => 1 );
-__PACKAGE__->_add_accessor( _last_request  => init_arg => undef, setter => 1, predicate => 1 );
-__PACKAGE__->_add_accessor( _last_response => init_arg => undef, setter => 1, predicate => 1 );
 
-sub configure {
-  my ( $self, %params ) = @_;
-
-  __PACKAGE__->_swallow_constructor_args( $self, \%params );
-
-  die 'Attribute `http` is required, and should be a NAHTTP client'
-    unless $self->has_http;
-
-  die 'Either attribute `uri` ( A HTTP URI )' .    #
-    ' or `request` ( an HTTP::Request ) is required'
-    unless $self->has_uri or $self->has_initial_request;
-
-  return $self->SUPER::configure(%params);
-}
+has '_active'        => ( is => 'rwp', init_arg => undef );
+has '_last_request'  => ( is => 'rwp', init_arg => undef, predicate => 1 );
+has '_last_response' => ( is => 'rwp', init_arg => undef, predicate => 1 );
 
 # Logging functions constructed later
 ## no critic (ProhibitSubroutinePrototypes)
@@ -102,74 +85,43 @@ sub on_response {
   '304' eq $response->code and return $self->on_no_content($response);
 }
 
-our %ARGS;
-
-sub _swallow_constructor_args {
-  my ( $class, $instance, $arghash ) = @_;
-  my $argmap = $ARGS{$class};
-  exists $arghash->{$_} and $instance->{ $argmap->{$_} } = delete $arghash->{$_} for keys %{$argmap};
+sub BUILD {
+  my ($self) = @_;
+  die 'Either attribute `uri` ( A HTTP URI )' .    #
+    ' or `request` ( an HTTP::Request ) is required'
+    unless $self->has_uri or $self->has_initial_request;
 }
 
-sub _set_sub {
-  my ( $class, $name, $code ) = @_;
-  no strict 'refs';    ## no critic (ProhibitNoStrict)
-  *{ $class . q[::] . $name } = $code;
-}
-
-sub _prefix_name {
-  my ( $prefix, $name ) = @_[ 1 .. $#_ ];
-  $name =~ /\A_/sx ? "_${prefix}${name}" : "${prefix}_${name}";
-}
-
-sub _add_accessor {
-  my ( $class, $name, %spec ) = @_;
-
-  $class->_add_setter($name) if $spec{setter};
-
-  $class->_add_predicate($name) if $spec{predicate};
-
-  $spec{init_arg} = $name if not exists $spec{init_arg};
-
-  $ARGS{$class}{ $spec{init_arg} } = $class . q[/] . $name if defined $spec{init_arg};
-
-  if ( $spec{default} ) {
-    return $class->_set_sub(
-      $name => sub {
-        exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name };
-        $_[0]->{ $class . q[/] . $name } = $spec{default}->( $_[0] );
-      },
-    );
+# This evil code has to delete all the attributes Moo picks up
+# or IO::A:Notifier will cry about extra arguments.
+sub FOREIGNBUILDARGS {
+  my ( $self, @args ) = @_;
+  my $argshash = { ( ref $args[0] ) ? %{ $args[0] } : @args };
+  my $cmaker = Moo->_constructor_maker_for(__PACKAGE__)->all_attribute_specs;
+  for my $key ( keys %{$cmaker} ) {
+    next
+      if exists $cmaker->{$key}->{init_arg}
+      and not defined $cmaker->{$key}->{init_arg};
+    if ( exists $cmaker->{$key}->{init_arg} ) {
+      delete $argshash->{ $cmaker->{$key}->{init_arg} };
+      next;
+    }
+    delete $argshash->{$key};
   }
-
-  return $class->_set_sub( $name => sub { exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name } } );
-}
-
-sub _add_setter {
-  my ( $class, $name, %spec ) = @_;
-  my $iname = $spec{iname} || $name;
-  return $class->_set_sub(
-    $class->_prefix_name( 'set', $name ),    # set_foo and _set_foo
-    sub { $_[0]->{ $class . q[/] . $iname } = $_[1] },
-  );
-}
-
-sub _add_predicate {
-  my ( $class, $name, ) = @_;
-  return $class->_set_sub(
-    $class->_prefix_name( 'has', $name ),    # has_foo and _has_foo
-    sub { exists $_[0]->{ $class . q[/] . $name } },
-  );
+  %{$argshash};
 }
 
 sub _add_sub_proxy {
   my ( $class, $name ) = @_;
-  $ARGS{$class}{$name} = $class . q[/] . $name;
-  return $class->_set_sub(
-    $name => sub {
-      log_trace { $name };
-      exists $_[0]->{ $class . q[/] . $name } and return $_[0]->{ $class . q[/] . $name }->( @_[ 1 .. $#_ ] );
-    },
-  );
+  my $attr_name = "_$name";
+  has $attr_name => ( is => ro =>, init_arg => $name, predicate => 1 );
+  my $pred_method = "_has_$name";
+  my $code        = sub {
+    log_trace { $name };
+    $_[0]->$pred_method() and return $_[0]->$attr_name()->( @_[ 1 .. $#_ ] );
+  };
+  no strict 'refs';    ## no critic (ProhibitNoStrict)
+  *{ $class . q[::] . $name } = $code;
 }
 
 BEGIN {
@@ -216,20 +168,20 @@ sub _uri_to_get {
 sub _dispatch_request {
   my ( $self, $request ) = @_;
   return if !!$self->_active;
-  $self->_set_active(1);
-  $self->_set_last_request($request);
+  $self->_set__active(1);
+  $self->_set__last_request($request);
   $self->http->do_request(
     request   => $request,
     on_header => sub {
-      $self->_set_last_response( $_[0] );
+      $self->_set__last_response( $_[0] );
       $self->on_header(@_);
     },
     on_response => sub {
-      $self->_set_active(0);
+      $self->_set__active(0);
       $self->on_response(@_);
     },
     on_error => sub {
-      $self->_set_active(0);
+      $self->_set__active(0);
       $self->on_error(@_);
     },
   );
