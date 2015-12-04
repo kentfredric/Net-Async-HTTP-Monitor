@@ -93,8 +93,7 @@ sub BUILD {
 # This evil code has to delete all the attributes Moo picks up
 # or IO::A:Notifier will cry about extra arguments.
 sub FOREIGNBUILDARGS {
-  my ( $self, @args ) = @_;
-  my $argshash = { ( ref $args[0] ) ? %{ $args[0] } : @args };
+  my $argshash = { ( ref $_[1] ) ? %{ $_[1] } : @_[ 1 .. $#_ ] };
   my $cmaker = Moo->_constructor_maker_for(__PACKAGE__)->all_attribute_specs;
   for my $key ( keys %{$cmaker} ) {
     next
