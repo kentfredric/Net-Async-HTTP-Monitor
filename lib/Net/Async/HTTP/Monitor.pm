@@ -17,12 +17,10 @@ extends 'IO::Async::Notifier';
 
 has http => ( is => 'ro', required  => 1 );
 has uri  => ( is => 'ro', predicate => 1 );
-has refresh_interval => ( is => ro => lazy => 1, default => sub { 60 } );
-has first_interval   => ( is => ro => lazy => 1, default => sub { 0 } );
+has refresh_interval => ( is => ro =>, lazy => 1, default => sub { 60 } );
+has first_interval   => ( is => ro =>, lazy => 1, default => sub { 0 } );
 
 has initial_request => ( is => ro =>, lazy => 1, predicate => 1, default => sub { $_[0]->_uri_to_get( $_[0]->uri ) } );
-
-
 
 __PACKAGE__->_add_sub_proxy('on_updated_chunk');
 __PACKAGE__->_add_sub_proxy('on_updated');
